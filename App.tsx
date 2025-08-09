@@ -88,6 +88,42 @@ tags: ["twitter", "x", "replies"]
 }
 ];
 
+// --- Fetchers ---
+async function fetchTrendsFromReddit(limit: number = 30): Promise<Trend[]> {
+  try {
+    const resp = await fetch(
+      `https://www.reddit.com/r/OutOfTheLoop/top.json?t=week&limit=${limit}`
+    );
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    const items = json?.data?.children ?? [];
+    const trends: Trend[] = items
+      .map((c: any) => c?.data)
+      .filter(Boolean)
+      .map((d: any) => {
+        const id: string = d.id || d.name || `${d.subreddit}_${d.created}`;
+        const title: string = String(d.title || "Untitled").trim();
+        const self: string = String(d.selftext || "").trim();
+        const shortSummary: string = self
+          ? self.split(/\n+/).find((p: string) => p.trim().length > 0)?.slice(0, 220) || title
+          : title;
+        return {
+          id,
+          title,
+          shortSummary,
+          longExplanation: self || title,
+          exampleSentence: "",
+          category: "Trend",
+          sources: [{ name: "r/OutOfTheLoop", url: `https://www.reddit.com${d.permalink}` }],
+          tags: (d.link_flair_text ? [String(d.link_flair_text)] : [])
+        } as Trend;
+      });
+    return trends;
+  } catch (e) {
+    return [];
+  }
+}
+
 // --- Persistence keys ---
 const KEY_ONBOARDED = "onboarded_v1";
 const KEY_FAVORITES = "favorites_v1";
@@ -98,29 +134,43 @@ type TabKey = "Home" | "Search" | "Favorites" | "Settings";
 type StackKey = null | "Detail" | "Onboarding" | "About";
 
 export default function App() {
-const [tab, setTab] = useState<TabKey>("Home");
-const [stack, setStack] = useState<StackKey>(null);
-const [selectedTrend, setSelectedTrend] = useState<Trend | null>(null);
-const [onboarded, setOnboarded] = useState<boolean>(true);
-const [favorites, setFavorites] = useState<string[]>([]);
-const [notifEnabled, setNotifEnabled] = useState<boolean>(false);
-const accent = ACCENT;
+  const [tab, setTab] = useState<TabKey>("Home");
+  const [stack, setStack] = useState<StackKey>(null);
+  const [selectedTrend, setSelectedTrend] = useState<Trend | null>(null);
+  const [onboarded, setOnboarded] = useState<boolean>(true);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [notifEnabled, setNotifEnabled] = useState<boolean>(false);
+  const [trends, setTrends] = useState<Trend[]>(TRENDS);
+  const [loadingTrends, setLoadingTrends] = useState<boolean>(false);
+  const accent = ACCENT;
 
-useEffect(() => {
-(async () => {
-const [o, f, n] = await Promise.all([
-AsyncStorage.getItem(KEY_ONBOARDED),
-AsyncStorage.getItem(KEY_FAVORITES),
-AsyncStorage.getItem(KEY_NOTIF_ENABLED)
-]);
-if (!o) {
-setOnboarded(false);
-setStack("Onboarding");
-}
-if (f) setFavorites(JSON.parse(f));
-if (n) setNotifEnabled(n === "1");
-})();
-}, []);
+  useEffect(() => {
+    (async () => {
+      const [o, f, n] = await Promise.all([
+        AsyncStorage.getItem(KEY_ONBOARDED),
+        AsyncStorage.getItem(KEY_FAVORITES),
+        AsyncStorage.getItem(KEY_NOTIF_ENABLED)
+      ]);
+      if (!o) {
+        setOnboarded(false);
+        setStack("Onboarding");
+      }
+      if (f) setFavorites(JSON.parse(f));
+      if (n) setNotifEnabled(n === "1");
+      // Fetch live trends
+      setLoadingTrends(true);
+      const live = await fetchTrendsFromReddit(40);
+      if (live.length > 0) setTrends(live);
+      setLoadingTrends(false);
+    })();
+  }, []);
+
+  const refreshTrends = async () => {
+    setLoadingTrends(true);
+    const live = await fetchTrendsFromReddit(40);
+    if (live.length > 0) setTrends(live);
+    setLoadingTrends(false);
+  };
 
 // --- Notifications ---
 const scheduleDailyDigest = async () => {
@@ -182,10 +232,15 @@ await toggleNotifications(true);
 return (
 <SafeAreaView style={[styles.container, { backgroundColor: BG }]}>
 {/* Header */}
-<View style={styles.header}>
-<Text style={[styles.title, { color: TEXT }]}>Boomer</Text>
-<Text style={[styles.subtitle, { color: MUTED }]}>Plain-English Internet Trends</Text>
-</View>
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, { color: TEXT }]}>Boomer</Text>
+          <Text style={[styles.subtitle, { color: MUTED }]}>Plain-English Internet Trends</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh" onPress={refreshTrends} style={styles.refreshBtn}>
+          <Text style={{ color: loadingTrends ? MUTED : ACCENT }}>{loadingTrends ? "…" : "Refresh"}</Text>
+        </Pressable>
+      </View>
 
   {/* Body */}
   <View style={styles.body}>
@@ -211,7 +266,7 @@ return (
       <>
         {tab === "Home" && (
           <HomeView
-            data={TRENDS}
+            data={trends}
             favorites={favorites}
             onOpen={openDetail}
             onToggleFav={toggleFav}
@@ -220,7 +275,7 @@ return (
         )}
         {tab === "Search" && (
           <SearchView
-            data={TRENDS}
+            data={trends}
             onOpen={openDetail}
             onToggleFav={toggleFav}
             favorites={favorites}
@@ -229,7 +284,7 @@ return (
         )}
         {tab === "Favorites" && (
           <FavoritesView
-            data={TRENDS.filter(t => favorites.includes(t.id))}
+            data={trends.filter(t => favorites.includes(t.id))}
             onOpen={openDetail}
             onToggleFav={toggleFav}
             accent={accent}
@@ -352,16 +407,12 @@ onToggleFav: (id: string) => void;
 accent: string;
 }) {
 const [q, setQ] = useState("");
-const filtered = useMemo(() => {
-const term = q.trim().toLowerCase();
-if (!term) return data;
-return data.filter(
-(t) =>
-t.title.toLowerCase().includes(term) ||
-t.tags.some((tag) => tag.toLowerCase().includes(term)) ||
-t.shortSummary.toLowerCase().includes(term)
-);
-}, [q, data]);
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return data;
+    const has = (s?: string) => (s ? s.toLowerCase().includes(term) : false);
+    return data.filter((t) => has(t.title) || has(t.shortSummary) || has(t.longExplanation) || (t.tags || []).some((tag) => has(tag)));
+  }, [q, data]);
 
 return (
 <View style={{ flex: 1 }}>
