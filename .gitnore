@@ -1,0 +1,16 @@
+Node / Expo
+node_modules
+npm-debug.log
+yarn-error.log
+.expo
+.expo-shared
+dist
+web-build
+.expo-env.local
+macOS
+.DS_Store
+EAS
+build
+credentials.json
+TypeScript build artifacts (if added later)
+*.tsbuildinfo
