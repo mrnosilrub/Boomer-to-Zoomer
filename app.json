@@ -1,0 +1,31 @@
+// TODO: Set a real EAS project ID below (extra.eas.projectId). Get it from eas project:init or the Expo dashboard.
+{
+"expo": {
+"name": "Boomer — Plain-English Internet Trends",
+"slug": "boomer-plain-english-internet-trends",
+"scheme": "boomertrends",
+"version": "1.0.0",
+"orientation": "portrait",
+"userInterfaceStyle": "automatic",
+"icon": "./assets/icon.png",
+"splash": {
+"image": "./assets/splash.png",
+"resizeMode": "contain",
+"backgroundColor": "#0B0B0B"
+},
+"plugins": [
+"expo-notifications",
+"expo-haptics"
+],
+"ios": {
+"bundleIdentifier": "com.{myname}.boomer-plain-english-trends",
+"supportsTablet": true
+},
+"extra": {
+"eas": {
+"projectId": "TODO_FILL_EAS_PROJECT_ID"
+},
+"accentColor": "#24D3A8"
+}
+}
+}
