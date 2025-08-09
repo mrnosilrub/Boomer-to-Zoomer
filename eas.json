@@ -1,0 +1,24 @@
+// TIP: Add submit.production.ios.ascAppId once you have the App Store Connect app ID to enable eas submit.
+{
+"cli": {
+"version": ">= 10.0.0"
+},
+"build": {
+"preview": {
+"ios": {
+"image": "latest"
+}
+},
+"production": {
+"ios": {
+"image": "latest"
+}
+}
+},
+"submit": {
+"production": {
+"ios": {
+}
+}
+}
+}
